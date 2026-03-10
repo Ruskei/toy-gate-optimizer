@@ -1,3 +1,5 @@
+import std/times
+import std/monotimes
 import std/algorithm
 import std/sets
 import std/strutils
@@ -165,8 +167,8 @@ proc optimize_logic[num_outputs: static int](
     if base_tt in remaining_outputs:
       remaining_outputs.excl base_tt
 
-  let binary_gate_kinds: array[5, gate_kind] = [gk_and, gk_nand, gk_or, gk_nor, gk_xor]
-  let unary_gate_kinds: array[1, gate_kind] = [gk_not]
+  let binary_gate_kinds: array[2, gate_kind] = [gk_nand, gk_xor]
+  let unary_gate_kinds: array[0, gate_kind] = []
 
   var total_cost = 1
   while remaining_outputs.len > 0:
@@ -270,7 +272,7 @@ const
     (seg_a_bit or seg_c_bit or seg_d_bit or seg_e_bit or seg_f_bit or seg_g_bit),
     (seg_a_bit or seg_b_bit or seg_c_bit),
     (seg_a_bit or seg_b_bit or seg_c_bit or seg_d_bit or seg_e_bit or seg_f_bit or seg_g_bit),
-    (seg_a_bit or seg_b_bit or seg_c_bit or seg_d_bit or seg_f_bit or seg_g_bit),
+    (seg_a_bit or seg_b_bit or seg_c_bit or seg_f_bit or seg_g_bit),
   ]
 
 proc char_to_seg_mask(ch: char): uint8 =
@@ -298,9 +300,16 @@ proc birthday_to_sevenseg_outputs*(month, day, year: int): array[8, uint8] =
   outputs
 
 proc main() =
-  let outs = birthday_to_sevenseg_outputs(4, 22, 2008)
+  let start = get_mono_time()
+  let outs = birthday_to_sevenseg_outputs(6, 22, 2009)
   for i, v in outs:
     echo seven_seg(i), " = 0b", to_bin(int(v), 8)
   optimize_logic outs
 
+  let finish = get_mono_time()
+  echo "Fully took ", in_milliseconds(finish - start), "ms"
+  
+  # optimize_logic [
+  #   0b01011011'u8
+  # ]
 main()
