@@ -366,11 +366,18 @@ proc initialize_missing_counts_and_enabled(
     if missing_count == 0 and not initial_state.contains_signal(root):
       result.enabled_witnesses.add witness_id
 
+proc output_flags(
+  outs: seq[uint8]
+): array[256, bool] =
+  for output in outs:
+    result[int(output)] = true
+
 proc optimize_gates_needed(
   built_signals: seq[uint8],
   outs: seq[uint8],
   witness_data: WitnessData,
 ): OptimizeResult =
+  let output_flags = output_flags outs
   let initial_state = to_built_signal_state(built_signals)
   if initial_state.outputs_satisfied(outs):
     result.min_gates = 0
@@ -378,6 +385,8 @@ proc optimize_gates_needed(
     return
 
   let init = initialize_missing_counts_and_enabled(initial_state, outs, witness_data)
+
+  var deepest = 0
 
   var state = SearchState(
     built_state: initial_state,
@@ -399,20 +408,21 @@ proc optimize_gates_needed(
     var best_result = SearchResult(min_gates: unreached_cost, used_witness_ids: @[])
 
     let enabled_len = state.enabled_witnesses.len
-    for idx in 0 ..< enabled_len:
-      let witness_id = state.enabled_witnesses[idx]
+
+    proc process_witness_id(witness_id: WitnessID) =
       if state.missing_children_counts[witness_id] > 0:
-        continue
+        return
 
       let witness = witness_data.all_witnesses[witness_id]
       let root = witness.root_signal
       if state.built_state.contains_signal(root):
-        continue
+        return
 
       let undo_log_checkpoint = undo_log.len
 
       block recurse:
         inc state.num_gates_used
+        deepest = max(deepest, state.num_gates_used)
         state.used_witness_ids.add witness_id
         state.built_state.incl_signal(root)
 
@@ -506,6 +516,20 @@ proc optimize_gates_needed(
       while undo_log.len > undo_log_checkpoint:
         let undo_entry = undo_log.pop()
         state.missing_children_counts[undo_entry.witness_id] = undo_entry.old_value
+
+    for idx in 0 ..< enabled_len:
+      let witness_id = state.enabled_witnesses[idx]
+      let witness = witness_data.all_witnesses[witness_id]
+      if not output_flags[witness.root_signal]: continue
+
+      process_witness_id witness_id
+
+    for idx in 0 ..< enabled_len:
+      let witness_id = state.enabled_witnesses[idx]
+      let witness = witness_data.all_witnesses[witness_id]
+      if output_flags[witness.root_signal]: continue
+
+      process_witness_id witness_id
 
     memo[state.built_state] = best_result
 
@@ -677,10 +701,8 @@ proc capture_optimize_run*(
 
 proc print_optimize_run*(outs: seq[uint8], run: OptimizeRun) =
   let unique_outs = outs.deduplicate
-  echo "generating witnesses took ", run.generation_ms, "ms"
-  echo run.min_gates
   format_optimize_result(unique_outs, run.optimize_result)
-  echo "fully optimizing logic took ", run.total_ms, "ms"
+  echo "Fully optimizing logic took=", run.total_ms, "ms"
 
 proc fully_optimize_logic*(
   outs: seq[uint8],
