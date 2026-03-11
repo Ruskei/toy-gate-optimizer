@@ -106,6 +106,18 @@ proc eval_binary_gate(
   of gk_xor:
     left_signal xor right_signal
 
+proc initial_signals(context: GateContext): seq[uint8] =
+  result = @[]
+  for nullary_gate in context.allowed_nullary_gates:
+    let signal = eval_nullary_gate(nullary_gate)
+    var already_present = false
+    for existing_signal in result:
+      if existing_signal == signal:
+        already_present = true
+        break
+    if not already_present:
+      result.add signal
+
 proc gates_needed(gate_context: GateContext, output: uint8): int =
   var best_cost: array[256, int]
   for i in 0 .. high(best_cost):
@@ -487,8 +499,7 @@ proc optimize_gates_needed(
         let undo_entry = undo_log.pop()
         state.missing_children_counts[undo_entry.witness_id] = undo_entry.old_value
 
-    if best_result.min_gates != unreached_cost:
-      memo[state.built_state] = best_result
+    memo[state.built_state] = best_result
 
     result = best_result
 
@@ -623,18 +634,7 @@ proc fully_optimize_logic*(outs: seq[uint8]) =
   )
 
   let witness_data = generate_witnesses(context, unique_outs)
-
-  var initial_signals: seq[uint8] = @[]
-  for nullary_gate in context.allowed_nullary_gates:
-    let signal = eval_nullary_gate(nullary_gate)
-    var already_present = false
-    for existing_signal in initial_signals:
-      if existing_signal == signal:
-        already_present = true
-        break
-    if not already_present:
-      initial_signals.add signal
-
+  let initial_signals = context.initial_signals
   let optimization_result = optimize_gates_needed(initial_signals, unique_outs, witness_data)
   format_optimize_result(unique_outs, optimization_result)
 

@@ -303,6 +303,8 @@ proc birthday_to_sevenseg_outputs*(month, day, year: int): array[8, uint8] =
 
 proc main() =
   let start = get_mono_time()
+  # easy: 2, 26, 2008
+  # hard: 11, 13, 2007
   let outs = birthday_to_sevenseg_outputs(11, 13, 2007)
   for i, v in outs:
     echo seven_seg(i), " = 0b", to_bin(int(v), 8)
