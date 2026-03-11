@@ -3,7 +3,6 @@ import std/monotimes
 import std/tables
 import std/sets
 import std/strutils
-import std/algorithm
 import std/sequtils
 
 type
@@ -617,9 +616,33 @@ proc format_optimize_result(
     echo "  w", i, " [", signal_label(root), "] = ",
          format_witness_definition(witness, witness_index_by_root)
 
-proc fully_optimize_logic*(outs: seq[uint8]) =
+proc fully_optimize_logic*(
+  outs: seq[uint8],
+  enable_not: bool = true,
+  enable_and: bool = true,
+  enable_nand: bool = true,
+  enable_or: bool = true,
+  enable_nor: bool = true,
+  enable_xor: bool = true,
+) =
   let unique_outs = outs.deduplicate
   let start = get_mono_time()
+
+  var allowed_unary_gates: seq[UnaryGateKind] = @[]
+  if enable_not:
+    allowed_unary_gates.add gk_not
+
+  var allowed_binary_gates: seq[BinaryGateKind] = @[]
+  if enable_nand:
+    allowed_binary_gates.add gk_nand
+  if enable_and:
+    allowed_binary_gates.add gk_and
+  if enable_xor:
+    allowed_binary_gates.add gk_xor
+  if enable_or:
+    allowed_binary_gates.add gk_or
+  if enable_nor:
+    allowed_binary_gates.add gk_nor
 
   let context = GateContext(
     allowed_nullary_gates: @[
@@ -629,8 +652,8 @@ proc fully_optimize_logic*(outs: seq[uint8]) =
       gk_const_0,
       gk_const_1,
     ],
-    allowed_unary_gates: @[gk_not],
-    allowed_binary_gates: @[gk_nand, gk_and, gk_xor, gk_or, gk_nor],
+    allowed_unary_gates: allowed_unary_gates,
+    allowed_binary_gates: allowed_binary_gates,
   )
 
   let witness_data = generate_witnesses(context, unique_outs)
