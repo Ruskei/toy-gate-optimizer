@@ -53,6 +53,11 @@ type
   OptimizeResult = object
     min_gates: int
     used_witnesses: seq[Witness]
+  OptimizeRun* = object
+    min_gates*: int
+    generation_ms*: int64
+    total_ms*: int64
+    optimize_result: OptimizeResult
   SearchState = object
     built_state: BuiltSignalState
     missing_children_counts: seq[uint8]
@@ -177,13 +182,18 @@ proc gates_needed(gate_context: GateContext, output: uint8): int =
 
   result = total_cost
 
-proc generate_witnesses(gate_context: GateContext, outs: seq[uint8]): WitnessData =
+proc generate_witnesses(
+  gate_context: GateContext,
+  outs: seq[uint8],
+  generation_ms: var int64,
+): WitnessData =
   let start = get_mono_time()
 
   var upper_bound = 0
   for output in outs:
     let cost = gate_context.gates_needed(output)
     if cost == unreached_cost:
+      generation_ms = in_milliseconds(get_mono_time() - start)
       return
     upper_bound += cost
 
@@ -256,8 +266,7 @@ proc generate_witnesses(gate_context: GateContext, outs: seq[uint8]): WitnessDat
               best_cost[int(root_signal)] = total_cost
               frontiers[total_cost].add root_signal
 
-  let finish = get_mono_time()
-  echo "generating witnesses took ", in_milliseconds(finish - start), "ms"
+  generation_ms = in_milliseconds(get_mono_time() - start)
 
 proc contains_signal(state: BuiltSignalState, signal: uint8): bool =
   let signal_index = int(signal)
@@ -503,7 +512,6 @@ proc optimize_gates_needed(
     result = best_result
 
   let root_result = solve()
-  echo best_found
 
   if root_result.min_gates == unreached_cost:
     result.min_gates = unreached_cost
@@ -616,7 +624,7 @@ proc format_optimize_result(
     echo "  w", i, " [", signal_label(root), "] = ",
          format_witness_definition(witness, witness_index_by_root)
 
-proc fully_optimize_logic*(
+proc capture_optimize_run*(
   outs: seq[uint8],
   enable_not: bool = true,
   enable_and: bool = true,
@@ -624,7 +632,7 @@ proc fully_optimize_logic*(
   enable_or: bool = true,
   enable_nor: bool = true,
   enable_xor: bool = true,
-) =
+): OptimizeRun =
   let unique_outs = outs.deduplicate
   let start = get_mono_time()
 
@@ -656,10 +664,40 @@ proc fully_optimize_logic*(
     allowed_binary_gates: allowed_binary_gates,
   )
 
-  let witness_data = generate_witnesses(context, unique_outs)
+  var generation_ms: int64 = 0
+  let witness_data = generate_witnesses(context, unique_outs, generation_ms)
   let initial_signals = context.initial_signals
-  let optimization_result = optimize_gates_needed(initial_signals, unique_outs, witness_data)
-  format_optimize_result(unique_outs, optimization_result)
+  let optimize_result = optimize_gates_needed(initial_signals, unique_outs, witness_data)
 
   let finish = get_mono_time()
-  echo "fully optimizing logic took ", in_milliseconds(finish - start), "ms"
+  result.min_gates = optimize_result.min_gates
+  result.generation_ms = generation_ms
+  result.total_ms = in_milliseconds(finish - start)
+  result.optimize_result = optimize_result
+
+proc print_optimize_run*(outs: seq[uint8], run: OptimizeRun) =
+  let unique_outs = outs.deduplicate
+  echo "generating witnesses took ", run.generation_ms, "ms"
+  echo run.min_gates
+  format_optimize_result(unique_outs, run.optimize_result)
+  echo "fully optimizing logic took ", run.total_ms, "ms"
+
+proc fully_optimize_logic*(
+  outs: seq[uint8],
+  enable_not: bool = true,
+  enable_and: bool = true,
+  enable_nand: bool = true,
+  enable_or: bool = true,
+  enable_nor: bool = true,
+  enable_xor: bool = true,
+) =
+  let run = capture_optimize_run(
+    outs,
+    enable_not = enable_not,
+    enable_and = enable_and,
+    enable_nand = enable_nand,
+    enable_or = enable_or,
+    enable_nor = enable_nor,
+    enable_xor = enable_xor,
+  )
+  print_optimize_run(outs, run)
