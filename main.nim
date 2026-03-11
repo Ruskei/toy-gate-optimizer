@@ -5,6 +5,8 @@ import std/sets
 import std/strutils
 import std/strformat
 
+import optimizer_2
+
 type
   gate_kind = enum
     gk_none,
@@ -40,9 +42,9 @@ proc is_commutative(gate_kind: gate_kind): bool =
 proc eval_binary_gate(gate_kind: gate_kind, left_tt, right_tt: uint8): uint8 =
   case gate_kind
   of gk_and: left_tt and right_tt
-  of gk_nand: (not (left_tt and right_tt)) and truth_mask
+  of gk_nand: (not (left_tt and right_tt))
   of gk_or: left_tt or right_tt
-  of gk_nor: (not (left_tt or right_tt)) and truth_mask
+  of gk_nor: (not (left_tt or right_tt))
   of gk_xor: left_tt xor right_tt
   else:
     raise new_exception(ValueError, "not a binary gate: " & $gate_kind)
@@ -167,8 +169,8 @@ proc optimize_logic[num_outputs: static int](
     if base_tt in remaining_outputs:
       remaining_outputs.excl base_tt
 
-  let binary_gate_kinds: array[2, gate_kind] = [gk_nand, gk_xor]
-  let unary_gate_kinds: array[0, gate_kind] = []
+  let binary_gate_kinds: array[5, gate_kind] = [gk_nand, gk_and, gk_xor, gk_or, gk_nor]
+  let unary_gate_kinds: array[1, gate_kind] = [gk_not]
 
   var total_cost = 1
   while remaining_outputs.len > 0:
@@ -301,15 +303,8 @@ proc birthday_to_sevenseg_outputs*(month, day, year: int): array[8, uint8] =
 
 proc main() =
   let start = get_mono_time()
-  let outs = birthday_to_sevenseg_outputs(6, 22, 2009)
+  let outs = birthday_to_sevenseg_outputs(11, 13, 2007)
   for i, v in outs:
     echo seven_seg(i), " = 0b", to_bin(int(v), 8)
-  optimize_logic outs
-
-  let finish = get_mono_time()
-  echo "Fully took ", in_milliseconds(finish - start), "ms"
-  
-  # optimize_logic [
-  #   0b01011011'u8
-  # ]
+  fully_optimize_logic @outs
 main()
