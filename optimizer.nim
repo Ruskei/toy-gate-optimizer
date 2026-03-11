@@ -368,9 +368,9 @@ proc initialize_missing_counts_and_enabled(
 
 proc output_flags(
   outs: seq[uint8]
-): array[256, bool] =
+): BuiltSignalState =
   for output in outs:
-    result[int(output)] = true
+    result.incl_signal output
 
 proc optimize_gates_needed(
   built_signals: seq[uint8],
@@ -409,14 +409,20 @@ proc optimize_gates_needed(
 
     let enabled_len = state.enabled_witnesses.len
 
+    var processed_signals: BuiltSignalState
+
     proc process_witness_id(witness_id: WitnessID) =
       if state.missing_children_counts[witness_id] > 0:
         return
 
       let witness = witness_data.all_witnesses[witness_id]
       let root = witness.root_signal
-      if state.built_state.contains_signal(root):
+      if processed_signals.contains_signal root:
         return
+      if state.built_state.contains_signal root:
+        return
+
+      processed_signals.incl_signal root
 
       let undo_log_checkpoint = undo_log.len
 
@@ -520,14 +526,14 @@ proc optimize_gates_needed(
     for idx in 0 ..< enabled_len:
       let witness_id = state.enabled_witnesses[idx]
       let witness = witness_data.all_witnesses[witness_id]
-      if not output_flags[witness.root_signal]: continue
+      if not output_flags.contains_signal witness.root_signal: continue
 
       process_witness_id witness_id
 
     for idx in 0 ..< enabled_len:
       let witness_id = state.enabled_witnesses[idx]
       let witness = witness_data.all_witnesses[witness_id]
-      if output_flags[witness.root_signal]: continue
+      if output_flags.contains_signal witness.root_signal: continue
 
       process_witness_id witness_id
 

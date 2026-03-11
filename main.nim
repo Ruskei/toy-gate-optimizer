@@ -1,6 +1,8 @@
 import std/parseopt
 import std/strutils
 import std/strformat
+import std/times
+import std/monotimes
 
 import optimizer
 
@@ -214,6 +216,8 @@ proc main() =
   if birthday_text.contains('9'):
     nine_styles.add true
 
+  let start = get_mono_time()
+
   for one_uses_ef in one_styles:
     for six_has_a in six_styles:
       for nine_has_d in nine_styles:
@@ -248,9 +252,12 @@ proc main() =
           has_best_candidate = true
         inc variant_id
 
+  let finish = get_mono_time()
+
   for i, v in best_candidate.outs:
     echo SevenSeg(i), " = 0b", to_bin(int(v), 8)
 
   print_optimize_run(@(best_candidate.outs), best_candidate.run)
+  echo "Total optiimization time=", in_milliseconds(finish - start), "ms"
 
 main()
